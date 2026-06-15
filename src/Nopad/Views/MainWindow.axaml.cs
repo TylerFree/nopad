@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Noopad.Services;
@@ -42,7 +43,7 @@ public partial class MainWindow : Window
         {
             if (_vm?.Settings is IUserSettingsService svc)
             {
-                var dialog = new SettingsDialog(svc);
+                var dialog = new SettingsDialog(svc, _vm.RecoveryDirectory);
                 var result = await dialog.ShowDialog<bool?>(this);
                 if (result == true)
                 {
@@ -55,6 +56,11 @@ public partial class MainWindow : Window
         _vm.SelectTextRequested += (start, length) =>
         {
             FindEditorView()?.SelectText(start, length);
+        };
+
+        _vm.ReplaceTextRequested += (start, length, replacement) =>
+        {
+            FindEditorView()?.ReplaceText(start, length, replacement);
         };
 
         WireTabStrip();
@@ -143,6 +149,50 @@ public partial class MainWindow : Window
 
         var menuSelectAll = this.FindControl<MenuItem>("MenuSelectAll");
         if (menuSelectAll != null) menuSelectAll.Click += (_, _) => FindEditorView()?.SelectAll();
+
+        var menuCut = this.FindControl<MenuItem>("MenuCut");
+        if (menuCut != null) menuCut.Click += (_, _) => FindEditorView()?.Cut();
+
+        var menuCopy = this.FindControl<MenuItem>("MenuCopy");
+        if (menuCopy != null) menuCopy.Click += (_, _) => FindEditorView()?.Copy();
+
+        var menuPaste = this.FindControl<MenuItem>("MenuPaste");
+        if (menuPaste != null) menuPaste.Click += (_, _) => FindEditorView()?.Paste();
+    }
+
+    private async void CopyTabPathClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem menuItem || TryGetContextMenuTab(menuItem) is not { } tab)
+            return;
+
+        if (string.IsNullOrWhiteSpace(tab.FilePath))
+            return;
+
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard != null)
+            await clipboard.SetTextAsync(tab.FilePath);
+
+        if (_vm != null)
+            _vm.StatusMessage = $"Copied path for {tab.Title}";
+
+        e.Handled = true;
+    }
+
+    private void CloseTabClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem menuItem && TryGetContextMenuTab(menuItem) is { } tab && _vm != null)
+        {
+            _ = _vm.CloseTabCommand.ExecuteAsync(tab);
+            e.Handled = true;
+        }
+    }
+
+    private static EditorTabViewModel? TryGetContextMenuTab(MenuItem menuItem)
+    {
+        if (menuItem.DataContext is EditorTabViewModel tab)
+            return tab;
+
+        return (menuItem.Parent as ContextMenu)?.PlacementTarget?.DataContext as EditorTabViewModel;
     }
 
     protected override void OnKeyDown(KeyEventArgs e)

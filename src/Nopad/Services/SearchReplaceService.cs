@@ -26,8 +26,20 @@ public class SearchReplaceService : ISearchReplaceService
         try
         {
             var rx = new Regex(regexPattern, options);
+            replacement = DecodeReplacementEscapes(replacement);
             return rx.Replace(text, regex ? replacement : replacement.Replace("$", "$$"));
         }
         catch { return text; }
+    }
+
+    public static string DecodeReplacementEscapes(string replacement)
+    {
+        if (string.IsNullOrEmpty(replacement)) return replacement;
+
+        return replacement
+            .Replace("\\r\\n", "\r\n", StringComparison.Ordinal)
+            .Replace("\\n", "\n", StringComparison.Ordinal)
+            .Replace("\\r", "\r", StringComparison.Ordinal)
+            .Replace("\\t", "\t", StringComparison.Ordinal);
     }
 }

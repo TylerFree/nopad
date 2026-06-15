@@ -20,7 +20,20 @@
                           ShowLineNumbers="{Binding ShowLineNumbers}"
                           WordWrap="{Binding WordWrap}"
                           HorizontalScrollBarVisibility="Auto"
-                          VerticalScrollBarVisibility="Auto"/>
+                          VerticalScrollBarVisibility="Auto">
+            <aedit:TextEditor.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="Undo" Click="UndoClick"/>
+                    <MenuItem Header="Redo" Click="RedoClick"/>
+                    <Separator/>
+                    <MenuItem Header="Cut" Click="CutClick"/>
+                    <MenuItem Header="Copy" Click="CopyClick"/>
+                    <MenuItem Header="Paste" Click="PasteClick"/>
+                    <Separator/>
+                    <MenuItem Header="Select All" Click="SelectAllClick"/>
+                </ContextMenu>
+            </aedit:TextEditor.ContextMenu>
+        </aedit:TextEditor>
 
         <!-- Splitter shown only when markdown preview is active -->
         <GridSplitter Grid.Column="1"

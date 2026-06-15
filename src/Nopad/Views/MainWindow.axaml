@@ -171,6 +171,13 @@
                                         Classes.active="{Binding IsActive}"
                                         Padding="0"
                                         Margin="1,2,1,0">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Copy Full Path" Click="CopyTabPathClick"/>
+                                            <Separator/>
+                                            <MenuItem Header="Close Tab" Click="CloseTabClick"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
                                     <StackPanel Orientation="Horizontal" Spacing="4" Margin="10,5,6,5">
                                         <Ellipse Width="8" Height="8" Fill="OrangeRed"
                                                  IsVisible="{Binding IsDirty}"

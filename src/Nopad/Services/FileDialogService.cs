@@ -24,11 +24,20 @@ public class FileDialogService : IFileDialogService
 
     public async Task<string?> SaveFileAsync(string? currentPath, string? suggestedName)
     {
-        var file = await _owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        var options = new FilePickerSaveOptions
         {
             Title = "Save File",
-            SuggestedFileName = suggestedName ?? "untitled.txt"
-        });
+            SuggestedFileName = suggestedName ?? Path.GetFileName(currentPath) ?? "untitled.txt"
+        };
+
+        if (!string.IsNullOrWhiteSpace(currentPath))
+        {
+            var directory = Path.GetDirectoryName(currentPath);
+            if (!string.IsNullOrWhiteSpace(directory) && Directory.Exists(directory))
+                options.SuggestedStartLocation = await _owner.StorageProvider.TryGetFolderFromPathAsync(directory);
+        }
+
+        var file = await _owner.StorageProvider.SaveFilePickerAsync(options);
         return file?.TryGetLocalPath();
     }
 }

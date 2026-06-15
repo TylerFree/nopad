@@ -16,6 +16,7 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly IUserSettingsService _settings;
     private readonly IReadOnlyList<string> _startupFilePaths;
     public IUserSettingsService Settings => _settings;
+    public string RecoveryDirectory => _recovery.RecoveryDirectory;
 
     public IFileDialogService? FileDialog { get; set; }
     public Func<string, Task<bool>>? CreateMissingFileHandler { get; set; }
@@ -449,6 +450,7 @@ public partial class MainWindowViewModel : ObservableObject
     private List<(int start, int length)> _searchMatches = new();
 
     public event Action<int, int>? SelectTextRequested;
+    public event Action<int, int, string>? ReplaceTextRequested;
 
     private void RefreshSearchMatches()
     {
@@ -489,18 +491,27 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (ActiveTab == null || _searchMatchIndex < 0 || _searchMatchIndex >= _searchMatches.Count) return;
         var (start, length) = _searchMatches[_searchMatchIndex];
-        ActiveTab.Content = ActiveTab.Content[..start] + SearchPanel.ReplaceText + ActiveTab.Content[(start + length)..];
-        ActiveTab.IsDirty = true;
+        var replacement = SearchReplaceService.DecodeReplacementEscapes(SearchPanel.ReplaceText);
+        if (ReplaceTextRequested != null)
+            ReplaceTextRequested.Invoke(start, length, replacement);
+        else
+            OnContentChanged(ActiveTab, ActiveTab.Content[..start] + replacement + ActiveTab.Content[(start + length)..]);
         RefreshSearchMatches();
     }
 
     private void OnReplaceAll()
     {
         if (ActiveTab == null) return;
-        ActiveTab.Content = _search.ReplaceAll(
+        var content = _search.ReplaceAll(
             ActiveTab.Content, SearchPanel.SearchText, SearchPanel.ReplaceText,
             SearchPanel.MatchCase, SearchPanel.WholeWord, SearchPanel.UseRegex);
-        ActiveTab.IsDirty = true;
+        if (content == ActiveTab.Content) return;
+
+        if (ReplaceTextRequested != null)
+            ReplaceTextRequested.Invoke(0, ActiveTab.Content.Length, content);
+        else
+            OnContentChanged(ActiveTab, content);
+
         StatusMessage = "Replace All complete";
         RefreshSearchMatches();
     }

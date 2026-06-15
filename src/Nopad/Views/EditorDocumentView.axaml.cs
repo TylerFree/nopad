@@ -294,6 +294,16 @@ public partial class EditorDocumentView : UserControl
         editor.TextArea.Caret.Offset = start + length;
     }
 
+    public void ReplaceText(int start, int length, string replacement)
+    {
+        var editor = this.FindControl<TextEditor>("TextEditor");
+        if (editor == null) return;
+        editor.Focus();
+        editor.Document.Replace(start, length, replacement);
+        editor.Select(start, replacement.Length);
+        editor.TextArea.Caret.Offset = start + replacement.Length;
+    }
+
     public void Undo()
     {
         var editor = this.FindControl<TextEditor>("TextEditor");
@@ -311,6 +321,31 @@ public partial class EditorDocumentView : UserControl
         var editor = this.FindControl<TextEditor>("TextEditor");
         editor?.SelectAll();
     }
+
+    public void Cut()
+    {
+        var editor = this.FindControl<TextEditor>("TextEditor");
+        editor?.Cut();
+    }
+
+    public void Copy()
+    {
+        var editor = this.FindControl<TextEditor>("TextEditor");
+        editor?.Copy();
+    }
+
+    public void Paste()
+    {
+        var editor = this.FindControl<TextEditor>("TextEditor");
+        editor?.Paste();
+    }
+
+    private void UndoClick(object? sender, RoutedEventArgs e) => Undo();
+    private void RedoClick(object? sender, RoutedEventArgs e) => Redo();
+    private void CutClick(object? sender, RoutedEventArgs e) => Cut();
+    private void CopyClick(object? sender, RoutedEventArgs e) => Copy();
+    private void PasteClick(object? sender, RoutedEventArgs e) => Paste();
+    private void SelectAllClick(object? sender, RoutedEventArgs e) => SelectAll();
 
     private MainWindowViewModel? GetMainViewModel()
     {
