@@ -12,6 +12,9 @@ public partial class MainWindow : Window
 {
     private MainWindowViewModel? _vm;
     private bool _singleInstanceServerStarted;
+    private DispatcherTimer? _externalChangeTimer;
+    private bool _checkingExternalChanges;
+    private SearchReplaceDialog? _searchDialog;
 
     public MainWindow()
     {
@@ -39,6 +42,13 @@ public partial class MainWindow : Window
             return await dialog.ShowDialog<bool>(this);
         };
 
+        _vm.ReloadFileHandler = async (tab) =>
+        {
+            BringToFront();
+            var dialog = new ReloadFileDialog(tab.Title, tab.FilePath ?? tab.Title, tab.IsDirty);
+            return await dialog.ShowDialog<bool>(this);
+        };
+
         _vm.ShowSettingsHandler = async () =>
         {
             if (_vm?.Settings is IUserSettingsService svc)
@@ -52,6 +62,10 @@ public partial class MainWindow : Window
                 }
             }
         };
+
+        _vm.FileLoaded += () => Dispatcher.UIThread.Post(BringToFront);
+        _vm.GoToLineRequested += () => _ = ShowGoToLineDialogAsync();
+        _vm.SearchDialogRequested += ShowSearchReplaceDialog;
 
         _vm.SelectTextRequested += (start, length) =>
         {
@@ -67,7 +81,32 @@ public partial class MainWindow : Window
         WireMenuItems();
 
         await _vm.InitializeAsync();
+        StartExternalChangeTimer();
         StartSingleInstanceServer();
+    }
+
+    private void StartExternalChangeTimer()
+    {
+        if (_externalChangeTimer != null)
+            return;
+
+        _externalChangeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        _externalChangeTimer.Tick += async (_, _) =>
+        {
+            if (_vm == null || _checkingExternalChanges)
+                return;
+
+            _checkingExternalChanges = true;
+            try
+            {
+                await _vm.CheckForExternalFileChangesAsync();
+            }
+            finally
+            {
+                _checkingExternalChanges = false;
+            }
+        };
+        _externalChangeTimer.Start();
     }
 
     private void StartSingleInstanceServer()
@@ -216,6 +255,45 @@ public partial class MainWindow : Window
         {
             _vm.SearchPanel.FindPreviousCommand.Execute(null); e.Handled = true;
         }
+        else if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.G)
+        {
+            _ = ShowGoToLineDialogAsync(); e.Handled = true;
+        }
+    }
+
+    private void ShowSearchReplaceDialog()
+    {
+        if (_vm == null)
+            return;
+
+        if (_searchDialog == null)
+        {
+            _searchDialog = new SearchReplaceDialog { DataContext = _vm.SearchPanel };
+            _searchDialog.Closed += (_, _) =>
+            {
+                if (_vm != null)
+                    _vm.SearchPanel.IsVisible = false;
+                _searchDialog = null;
+            };
+            _searchDialog.Show(this);
+        }
+        else
+        {
+            _searchDialog.Activate();
+            _vm.SearchPanel.RequestFocus();
+        }
+    }
+
+    public async Task ShowGoToLineDialogAsync()
+    {
+        var editor = FindEditorView();
+        if (editor == null)
+            return;
+
+        var dialog = new GoToLineDialog(editor.LineCount, _vm?.ActiveTab?.CursorLine ?? 1);
+        var line = await dialog.ShowDialog<int?>(this);
+        if (line != null)
+            editor.GoToLine(line.Value);
     }
 
     private EditorDocumentView? FindEditorView()
@@ -236,6 +314,7 @@ public partial class MainWindow : Window
 
     protected override async void OnClosing(WindowClosingEventArgs e)
     {
+        _externalChangeTimer?.Stop();
         if (_vm != null)
             await _vm.SaveRecoveryAsync();
         base.OnClosing(e);

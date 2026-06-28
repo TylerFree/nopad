@@ -1,11 +1,15 @@
+using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
+using CommunityToolkit.Mvvm.Input;
 using Noopad.Models;
 using Noopad.Services;
 using Noopad.ViewModels;
@@ -48,6 +52,12 @@ public partial class EditorDocumentView : UserControl
         editor.TextArea.Caret.PositionChanged += OnCaretPositionChanged;
         editor.TextArea.TextView.ScrollOffsetChanged += OnScrollOffsetChanged;
         editor.TextArea.KeyDown += OnEditorKeyDown;
+
+        // Disable AvaloniaEdit's built-in search panel so Ctrl+F focuses our find box instead.
+        try { editor.SearchPanel?.Uninstall(); } catch { /* ignore if not installed */ }
+
+        // Open markdown hyperlinks safely in the default browser instead of crashing the app.
+        MarkdownPreview.Plugins.HyperlinkCommand = new RelayCommand<object?>(OpenHyperlink);
 
         ApplyStoredFontSettings(editor);
         SyncFromViewModel();
@@ -182,6 +192,24 @@ public partial class EditorDocumentView : UserControl
             RemoveIndent(editor);
             e.Handled = true;
         }
+        else if (e.Key == Key.F && e.KeyModifiers == KeyModifiers.Control)
+        {
+            var mainVm = GetMainViewModel();
+            mainVm?.ShowFindPanelCommand.Execute(null);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.H && e.KeyModifiers == KeyModifiers.Control)
+        {
+            var mainVm = GetMainViewModel();
+            mainVm?.ShowReplacePanelCommand.Execute(null);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.G && e.KeyModifiers == KeyModifiers.Control)
+        {
+            var mainVm = GetMainViewModel();
+            mainVm?.ShowGoToLineCommand.Execute(null);
+            e.Handled = true;
+        }
     }
 
     private static void InsertIndent(TextEditor editor)
@@ -285,11 +313,38 @@ public partial class EditorDocumentView : UserControl
         }
     }
 
+    private void OpenHyperlink(object? parameter)
+    {
+        var url = parameter?.ToString();
+        if (string.IsNullOrWhiteSpace(url))
+            return;
+
+        try
+        {
+            if (Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+                (uri.Scheme == Uri.UriSchemeHttp ||
+                 uri.Scheme == Uri.UriSchemeHttps ||
+                 uri.Scheme == Uri.UriSchemeMailto ||
+                 uri.Scheme == Uri.UriSchemeFile))
+            {
+                Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
+            }
+            // Relative links or in-document anchors are ignored safely.
+        }
+        catch (Exception ex)
+        {
+            var mainVm = GetMainViewModel();
+            if (mainVm != null)
+                mainVm.StatusMessage = $"Could not open link: {ex.Message}";
+        }
+    }
+
     public void SelectText(int start, int length)
     {
         var editor = this.FindControl<TextEditor>("TextEditor");
         if (editor == null) return;
         editor.Focus();
+        ScrollOffsetIntoView(editor, start);
         editor.Select(start, length);
         editor.TextArea.Caret.Offset = start + length;
     }
@@ -299,9 +354,42 @@ public partial class EditorDocumentView : UserControl
         var editor = this.FindControl<TextEditor>("TextEditor");
         if (editor == null) return;
         editor.Focus();
+        ScrollOffsetIntoView(editor, start);
         editor.Document.Replace(start, length, replacement);
         editor.Select(start, replacement.Length);
         editor.TextArea.Caret.Offset = start + replacement.Length;
+    }
+
+    public int LineCount
+    {
+        get
+        {
+            var editor = this.FindControl<TextEditor>("TextEditor");
+            return editor?.Document?.LineCount ?? 1;
+        }
+    }
+
+    public void GoToLine(int lineNumber)
+    {
+        var editor = this.FindControl<TextEditor>("TextEditor");
+        if (editor?.Document == null) return;
+
+        var clampedLine = Math.Clamp(lineNumber, 1, editor.Document.LineCount);
+        var line = editor.Document.GetLineByNumber(clampedLine);
+        editor.Focus();
+        editor.Select(line.Offset, 0);
+        editor.TextArea.Caret.Offset = line.Offset;
+        editor.ScrollToLine(clampedLine);
+    }
+
+    private static void ScrollOffsetIntoView(TextEditor editor, int offset)
+    {
+        if (editor.Document == null)
+            return;
+
+        var clampedOffset = Math.Clamp(offset, 0, editor.Document.TextLength);
+        var line = editor.Document.GetLineByOffset(clampedOffset);
+        editor.ScrollToLine(line.LineNumber);
     }
 
     public void Undo()

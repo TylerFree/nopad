@@ -20,6 +20,7 @@
         <KeyBinding Gesture="Ctrl+W" Command="{Binding CloseTabCommand}"/>
         <KeyBinding Gesture="Ctrl+F" Command="{Binding ShowFindPanelCommand}"/>
         <KeyBinding Gesture="Ctrl+H" Command="{Binding ShowReplacePanelCommand}"/>
+        <KeyBinding Gesture="Ctrl+G" Command="{Binding ShowGoToLineCommand}"/>
     </Window.KeyBindings>
 
     <Window.Resources>
@@ -120,6 +121,7 @@
                 <MenuItem Header="Find Next" x:Name="MenuFindNext" InputGesture="F3"/>
                 <MenuItem Header="Find Previous" x:Name="MenuFindPrev" InputGesture="Shift+F3"/>
                 <MenuItem Header="Replace" Command="{Binding ShowReplacePanelCommand}" InputGesture="Ctrl+H"/>
+                <MenuItem Header="Go To Line..." Command="{Binding ShowGoToLineCommand}" InputGesture="Ctrl+G"/>
             </MenuItem>
             <MenuItem Header="F_ormat">
                 <MenuItem Header="Format JSON" Command="{Binding FormatJsonCommand}"/>
@@ -139,11 +141,6 @@
                 Padding="8,3">
             <TextBlock Text="{Binding StatusMessage}" FontSize="12"/>
         </Border>
-
-        <!-- Search/Replace Panel -->
-        <views:SearchReplacePanel DockPanel.Dock="Bottom"
-                                   DataContext="{Binding SearchPanel}"
-                                   IsVisible="{Binding SearchPanel.IsVisible}"/>
 
         <!-- Tab Bar + Editor Area -->
         <Grid>

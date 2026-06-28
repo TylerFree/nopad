@@ -1,1 +1,1 @@
-dotnet build .\src\Nopad\Nopad.csproj --configuration Release 
+dotnet build .\src\Noopad\Noopad.csproj --configuration Release 

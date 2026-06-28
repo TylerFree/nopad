@@ -1,0 +1,18 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Noopad.Views.GoToLineDialog"
+        Title="Go To Line"
+        Width="320" Height="170"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        ShowInTaskbar="False">
+    <Grid Margin="20" RowDefinitions="Auto,Auto,*,Auto">
+        <TextBlock Grid.Row="0" x:Name="PromptText" TextWrapping="Wrap"/>
+        <TextBox Grid.Row="1" x:Name="LineBox" Margin="0,8,0,6"/>
+        <TextBlock Grid.Row="2" x:Name="ErrorText" Foreground="Crimson" FontSize="12"/>
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+            <Button x:Name="GoBtn" Content="Go" Width="80"/>
+            <Button x:Name="CancelBtn" Content="Cancel" Width="80"/>
+        </StackPanel>
+    </Grid>
+</Window>

@@ -20,6 +20,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     public IFileDialogService? FileDialog { get; set; }
     public Func<string, Task<bool>>? CreateMissingFileHandler { get; set; }
+    public Func<EditorTabViewModel, Task<bool>>? ReloadFileHandler { get; set; }
 
     [ObservableProperty] private ObservableCollection<EditorTabViewModel> _tabs = new();
     [ObservableProperty] private EditorTabViewModel? _activeTab;
@@ -27,9 +28,13 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private string _statusMessage = "Ready";
 
     public SearchReplacePanelViewModel SearchPanel { get; } = new();
+    public event Action? FileLoaded;
+    public event Action? GoToLineRequested;
+    public event Action? SearchDialogRequested;
 
     private System.Timers.Timer? _recoveryTimer;
     private bool _recoveryPending;
+    private readonly HashSet<string> _externalChangePromptedTabIds = new();
 
     public MainWindowViewModel(
         IRecoveryService recovery,
@@ -185,6 +190,8 @@ public partial class MainWindowViewModel : ObservableObject
         {
             ActiveTab = existing;
             StatusMessage = $"Switched to {existing.Title}";
+            await CheckTabForExternalChangeAsync(existing);
+            FileLoaded?.Invoke();
             return true;
         }
 
@@ -204,6 +211,7 @@ public partial class MainWindowViewModel : ObservableObject
         Tabs.Add(tab);
         ActiveTab = tab;
         ScheduleRecovery();
+        FileLoaded?.Invoke();
         return true;
     }
 
@@ -380,6 +388,8 @@ public partial class MainWindowViewModel : ObservableObject
     {
         SearchPanel.ShowReplace = false;
         SearchPanel.IsVisible = true;
+        SearchDialogRequested?.Invoke();
+        SearchPanel.RequestFocus();
     }
 
     [RelayCommand]
@@ -387,6 +397,14 @@ public partial class MainWindowViewModel : ObservableObject
     {
         SearchPanel.ShowReplace = true;
         SearchPanel.IsVisible = true;
+        SearchDialogRequested?.Invoke();
+        SearchPanel.RequestFocus();
+    }
+
+    [RelayCommand]
+    private void ShowGoToLine()
+    {
+        GoToLineRequested?.Invoke();
     }
 
     [RelayCommand]
@@ -437,6 +455,74 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (tab.Syntax == SyntaxLanguage.Markdown || tab.ShowMarkdownPreview)
             tab.MarkdownHtml = _markdown.RenderToHtml(tab.Content);
+    }
+
+    public async Task CheckForExternalFileChangesAsync()
+    {
+        foreach (var tab in Tabs.Where(t => t.FilePath != null).ToList())
+            await CheckTabForExternalChangeAsync(tab);
+    }
+
+    private async Task CheckTabForExternalChangeAsync(EditorTabViewModel tab)
+    {
+        if (tab.FilePath == null || !File.Exists(tab.FilePath) || _externalChangePromptedTabIds.Contains(tab.Id))
+            return;
+
+        var diskTime = File.GetLastWriteTimeUtc(tab.FilePath);
+        if (tab.FileLastWriteTime == null)
+        {
+            tab.FileLastWriteTime = diskTime;
+            return;
+        }
+
+        if (diskTime == tab.FileLastWriteTime.Value)
+            return;
+
+        _externalChangePromptedTabIds.Add(tab.Id);
+        try
+        {
+            ActiveTab = tab;
+            StatusMessage = $"{tab.Title} changed on disk";
+            var reload = ReloadFileHandler != null && await ReloadFileHandler(tab);
+            if (reload)
+            {
+                await ReloadTabFromDiskAsync(tab);
+            }
+            else
+            {
+                tab.FileLastWriteTime = diskTime;
+                StatusMessage = $"Kept current content for {tab.Title}";
+                await SaveRecoveryAsync();
+            }
+        }
+        finally
+        {
+            _externalChangePromptedTabIds.Remove(tab.Id);
+        }
+    }
+
+    public async Task ReloadTabFromDiskAsync(EditorTabViewModel tab)
+    {
+        if (tab.FilePath == null)
+            return;
+
+        if (!File.Exists(tab.FilePath))
+        {
+            StatusMessage = $"File not found: {tab.FilePath}";
+            return;
+        }
+
+        var fullPath = Path.GetFullPath(tab.FilePath);
+        var content = await File.ReadAllTextAsync(fullPath);
+        tab.FilePath = fullPath;
+        tab.Title = Path.GetFileName(fullPath);
+        tab.Syntax = _syntax.DetectFromExtension(fullPath);
+        tab.FileLastWriteTime = File.GetLastWriteTimeUtc(fullPath);
+        tab.MarkClean(content);
+        UpdateMarkdownPreview(tab);
+        await _recovery.SaveTabContentAsync(tab.Id, tab.Content);
+        await SaveRecoveryAsync();
+        StatusMessage = $"Reloaded {tab.Title}";
     }
 
     public void OnCursorChanged(EditorTabViewModel tab, int line, int col)

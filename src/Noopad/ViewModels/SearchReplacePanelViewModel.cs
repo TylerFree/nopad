@@ -19,6 +19,9 @@ public partial class SearchReplacePanelViewModel : ObservableObject
     public event Action? ReplaceCurrentRequested;
     public event Action? ReplaceAllRequested;
     public event Action? CloseRequested;
+    public event Action? FocusRequested;
+
+    public void RequestFocus() => FocusRequested?.Invoke();
 
     [RelayCommand]
     private void FindNext() => FindNextRequested?.Invoke();
